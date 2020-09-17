@@ -1,132 +1,169 @@
+
 """CPU functionality."""
 
 import sys
-
-
-
 HLT = 0b00000001
 LDI = 0b10000010
 PRN = 0b01000111
-# ADD = 0b10100000
 MUL = 0b10100010
-# PUSH = 0b01000101
-# POP = 0b01000110
-# CALL = 0b01010000
-# RET = 0b00010001
+CMP = 0b10100111
+JMP = 0b01010100
+JEQ = 0b01010101
+JNE = 0b01010110
 
-
+# need to implement three instructions:
+#
+# LDI - load immediate, store a value in a register, or set this register to this value --- LDI  10000010 00000rrr iiiiiiii
+#  PRN -a pseudo instruction that prints the numeric value stored in a register --- PRN  01000111 00000rrr
+#  HLT - halt the cpu and exit the emulator HLT --- 00000001
+# CMP  10100111 00000aaa 00000bbb
+#  cmp - "cmp registerA registerB", compare the values in 2 registers
+#       if they are equal set the equal 'e' flag to 1, otherwise set it to 0
+#           if regA is less than regB, set the less-than 'L' flag to 1,
+#               otherwise set it to 09
+#
+#
 
 
 class CPU:
+
     """Main CPU class."""
 
     def __init__(self):
+        self.branchtable = {}
+        self.branchtable[MUL] = self.handle_MUL
+        self.branchtable[HLT] = self.handle_HLT
+        self.branchtable[PRN] = self.handle_PRN
+        self.branchtable[LDI] = self.handle_LDI
+        self.branchtable[CMP] = self.handle_CMP
+        self.branchtable[JMP] = self.handle_JMP
+        self.branchtable[JEQ] = self.handle_JEQ
+        self.branchtable[JNE] = self.handle_JNE
         """Construct a new CPU."""
-        self.pc = 0
+        
         self.ram = [0] * 256
         self.reg = [0] * 8
-        self.stack_pointer = 255
-        self.ops = {}
-        self.ops[LDI] = self.LDI
-        self.ops[PRN] = self.PRN
-        self.ops[HLT] = self.HLT
-        self.ops[MUL] = self.MUL
-        self.running = False
+        self.pc = 0
+        # set the starting flag to 0
+        self.flag = 0
+        # # Program Counter, index into memory of the current instruction
+        # AKA a pointer to the current instruction
+        self.running = True
+    # construct
 
-    def LDI(self):
-        address = self.ram[self.pc + 1]
-        value = self.ram[self.pc + 2]
-        self.ram_write(address, value)
+    def handle_MUL(self, operand_a, operand_b):
+        self.reg[operand_a] = self.reg[operand_a] * self.reg[operand_b]
         self.pc += 3
 
-    def PRN(self):
-        address = self.ram[self.pc + 1]
-        self.ram_read(address)
+    def handle_HLT(self, operand_a, operand_b):
+        sys.exit(1)
+
+    def handle_PRN(self, operand_a, operand_b):
+        print(self.reg[operand_a])
         self.pc += 2
 
-    def MUL(self):
-        reg_a = self.ram[self.pc + 1]
-        reg_b = self.ram[self.pc + 2]
-        self.alu('MUL', reg_a, reg_b)
+    def handle_LDI(self, operand_a, operand_b):
+        self.reg[operand_a] = operand_b
         self.pc += 3
 
-    def HLT(self):
-        self.running = False
+    def handle_CMP(self, operand_a, operand_b):
+        # cmp - "cmp registerA registerB", compare the values in 2 registers
+        #       if they are equal set the equal 'e' flag to 1, otherwise set it to 0
+        #           if regA is less than regB, set the less-than 'L' flag to 1,
+        #               otherwise set it to 09
+        reg1 = self.ram[self.pc + 1]
+        reg2 = self.ram[self.pc + 2]
+        self.alu("CMP", reg1, reg2)
+        self.pc += 3
+
+    def handle_JMP(self, operand_a, operand_b):
+        # Jump to the address stored in the given register.
+        # Set the `PC` to the address stored in the given register.
+        register = self.ram[self.pc + 1]
+        self.pc = self.reg[register]
+
+    def handle_JEQ(self, operand_a, operand_b):
+        # If `equal` flag is set (true), jump to the address stored in the given register.
+        register = self.ram[self.pc + 1]
+        if (self.flag & HLT) > 0:
+            self.pc = self.reg[register]
+        else:
+            self.pc += 2
+
+    def handle_JNE(self, operand_a, operand_b):
+        # If `E` flag is clear (false, 0), jump to the address stored in the given
+        # register.
+        register = self.ram[self.pc + 1]
+        if (self.flag & HLT) == 0:
+            self.pc = self.reg[register]
+        else:
+            self.pc += 2
 
 
+    def ram_read(self, MAR):
+        # Memory Address Register
+        #  read and return the value of MAR
+        return self.ram[MAR]
 
-    def load(self):
+    def ram_write(self, MAR, MDR):
+        # Memory Data Register
+        # accept value to write and the address to write it to
+        self.ram[MAR] = MDR
+
+    def load(self, newFile):
+        #  load program into memory
+        address = 0
+        with open(newFile) as file:
+            for line in file:
+                val = line.split("#")[0].strip()
+                if val == '':
+                    continue
+                instruction = int(val, 2)
+                self.ram[address] = instruction
+                address += 1
         """Load a program into memory."""
 
-        address = 0
 
-        # For now, we've just hardcoded a program:
+        # # For now, we've just hardcoded a program:
 
         # program = [
         #     # From print8.ls8
-        #     0b10000010, # LDI R0,8
+        #     0b10000010,  # LDI R0,8
         #     0b00000000,
         #     0b00001000,
-        #     0b01000111, # PRN R0
+        #     0b01000111,  # PRN R0
         #     0b00000000,
-        #     0b00000001, # HLT
+        #     0b00000001,  # HLT
         # ]
 
         # for instruction in program:
         #     self.ram[address] = instruction
         #     address += 1
 
-        if len(sys.argv) != 2:
-            print("usage: comp.py progname")
-            sys.exit(1)
-
-        try:
-            with open('examples/' + sys.argv[1]) as f:
-                for line in f:
-                    line = line.strip()
-                    temp = line.split()
-
-                    if len(temp) == 0:
-                        continue
-
-                    if temp[0][0] == '#':
-                        continue
-
-                    try:
-                        self.ram[address] = int(temp[0], 2)
-
-                    except ValueError:
-                        print(f"Invalid number: {temp[0]}")
-                        sys.exit(1)
-
-
-                    address += 1
-
-        except FileNotFoundError:
-            print(f"Couldn't open {sys.argv[1]}")
-            sys.exit(1)
-
-        if address == 0:
-            print("Program was empty!")
-            sys.exit(3)
-
-
-
-    def ram_read(self, address):
-        print(self.reg[address])
-
-
-    def ram_write(self, value, address):
-        self.reg[address] = value
-
     def alu(self, op, reg_a, reg_b):
         """ALU operations."""
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+
         elif op == "MUL":
-            self.reg[reg_a] *= self.reg[reg_b]
+            self.reg[reg_a] = self.reg[reg_a] * self.reg[reg_b]
+        # elif op == "SUB": etc
+        elif op == "CMP":
+            # cmp - "cmp registerA registerB", compare the values in 2 registers
+            #       if they are equal set the equal 'e' flag to 1, otherwise set it to 0
+            #           if regA is less than regB, set the less-than 'L' flag to 1,
+            #               otherwise set it to 09
+
+            if self.reg[reg_a] == self.reg[reg_b]:
+                self.flag = 0b00000001
+
+            # elif self.reg[reg_a] > self.reg[reg_b]:
+            #     self.flag = 0b00001001
+            # elif self.reg[reg_a] < self.reg[reg_b]:
+            #     self.flag = 0b00000001
+            else:
+                self.flag = 0b00000000
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -140,44 +177,30 @@ class CPU:
             self.pc,
             #self.fl,
             #self.ie,
+
             self.ram_read(self.pc),
             self.ram_read(self.pc + 1),
             self.ram_read(self.pc + 2)
         ), end='')
-
         for i in range(8):
             print(" %02X" % self.reg[i], end='')
-
-        #print()
+        print()
 
     def run(self):
+
+        while self.running is True:
+            self.trace()
+            IR = self.ram_read(self.pc)
+            operand_a = self.ram_read(self.pc + 1)
+            operand_b = self.ram_read(self.pc + 2)
+            if IR in self.branchtable:
+                self.branchtable[IR](operand_a, operand_b)
         """Run the CPU."""
         
+        #  read the memory address stored in the register,
+        #  run ram read on the register self.ram_read(self.pc)
+        #  and store the results in the instruction register(IR) <- to be created in the run
 
-        self.running = True
+        # Some instructions requires up to the next two bytes of data after the PC in memory to perform operations on.
 
-        while self.running:
-            ir = self.ram[self.pc]
-            self.ops[ir]()
-
-        # while running:
-        #     ir = self.ram_read(self.pc)
-        #     operand_a = self.ram_read(self.pc + 1)
-        #     operand_b = self.ram_read(self.pc + 1)
-
-        #     if ir == 0b10000010:
-        #         reg_num = self.ram[self.pc + 1]
-        #         value = self.ram[self.pc + 2]
-
-        #         self.reg[reg_num] = value
-
-        #         self.pc += 3
-
-        #     elif ir == 0b01000111:
-        #         reg_num = self.ram[self.pc + 1]
-        #         print(self.reg[reg_num])
-
-        #         self.pc += 2
-
-        #     elif ir == 0b00000001:
-        #         running = False
+        #  Sometimes the byte value is a register number, other times it's a constant value (in the case of LDI). 
