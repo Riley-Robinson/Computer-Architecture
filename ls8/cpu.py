@@ -204,3 +204,5 @@ class CPU:
         # Some instructions requires up to the next two bytes of data after the PC in memory to perform operations on.
 
         #  Sometimes the byte value is a register number, other times it's a constant value (in the case of LDI). 
+        #seems to work
+        
